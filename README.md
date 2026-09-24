@@ -86,7 +86,7 @@ npx cap sync
 **OutSystems:** create a library or module with this Extensibility Configuration, then call the plugin from a client action:
 
 ```json
-{ "plugin": { "url": "https://github.com/henriquefps/cordova-plugin-db-inspector.git#1.0.0" } }
+{ "plugin": { "url": "https://github.com/henriquefps/cordova-plugin-db-inspector.git#v1.0.0" } }
 ```
 
 The full [integration guide](docs/integration.md) covers Cordova, Capacitor and OutSystems, the client actions, production gating and troubleshooting.

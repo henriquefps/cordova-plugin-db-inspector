@@ -34,7 +34,7 @@ The plugin is inert until you call `open()`. It adds no background work, no star
 ```bash
 cordova plugin add cordova-plugin-db-inspector
 # or straight from git / a local checkout
-cordova plugin add https://github.com/henriquefps/cordova-plugin-db-inspector.git#1.0.0
+cordova plugin add https://github.com/henriquefps/cordova-plugin-db-inspector.git#v1.0.0
 cordova plugin add ../cordova-plugin-db-inspector
 ```
 
@@ -90,12 +90,12 @@ Create a mobile library (ODC) or a module (O11), for example `DbInspectorPlugin`
 ```json
 {
   "plugin": {
-    "url": "https://github.com/henriquefps/cordova-plugin-db-inspector.git#1.0.0"
+    "url": "https://github.com/henriquefps/cordova-plugin-db-inspector.git#v1.0.0"
   }
 }
 ```
 
-Pin a tag (`#1.0.0`) so every build uses the same plugin version. The plugin runs on any build service (MABS) version that ships cordova-android ≥ 10 and cordova-ios ≥ 6.
+Pin a tag (`#v1.0.0`) so every build uses the same plugin version. The plugin runs on any build service (MABS) version that ships cordova-android ≥ 10 and cordova-ios ≥ 6.
 
 ### 2. Client actions
 

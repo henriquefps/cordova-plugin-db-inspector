@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>DB Inspector Sample</title>
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    margin: 0; font: 15px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #f4f5f7; color: #151a23;
+    padding: calc(24px + env(safe-area-inset-top, 0px)) 20px calc(24px + env(safe-area-inset-bottom, 0px));
+  }
+  @media (prefers-color-scheme: dark) { body { background: #0d1117; color: #e6e9ef; } .card { background: #151b24 !important; border-color: #283142 !important; } }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  p { color: #6b7280; margin: 0 0 20px; }
+  .card { background: #fff; border: 1px solid #e3e6ec; border-radius: 14px; padding: 16px; margin-bottom: 14px; }
+  button {
+    width: 100%; font: inherit; font-weight: 650; padding: 13px; border-radius: 11px; border: 0;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6); color: #fff; margin-bottom: 10px;
+  }
+  button.secondary { background: #e5e7eb; color: #151a23; }
+  pre { font: 12px/1.5 ui-monospace, Menlo, monospace; white-space: pre-wrap; word-break: break-word; margin: 0; }
+</style>
+</head>
+<body>
+  <h1>DB Inspector Sample</h1>
+  <p>Opens the cordova-plugin-db-inspector UI over this app’s own sandbox.</p>
+
+  <div class="card">
+    <button id="open">Open DB Inspector</button>
+    <button id="openPresets" class="secondary">Open with team presets</button>
+    <button id="list" class="secondary">List databases (JS API)</button>
+  </div>
+  <div class="card"><pre id="out">Waiting for deviceready…</pre></div>
+
+<script>
+  var out = document.getElementById('out');
+  function log(v) { out.textContent = typeof v === 'string' ? v : JSON.stringify(v, null, 2); }
+
+  // The kind of presets a team could ship with the app (same format as the inspector export).
+  var TEAM_PRESETS = {
+    format: 'hfps-db-inspector-presets',
+    version: 1,
+    presets: [{
+      id: 'team_largest_tables',
+      name: 'Index statistics (sqlite_stat1)',
+      description: 'Uses ANALYZE statistics when the app has collected them.',
+      sql: 'SELECT tbl AS "table", idx AS "index", stat\nFROM sqlite_stat1\nORDER BY tbl',
+      tags: ['team']
+    }, {
+      id: 'team_entity_lookup',
+      name: 'OutSystems · entity lookup by name',
+      description: 'Physical table behind an OutSystems entity.',
+      sql: "SELECT Name, Physical_Table_name\nFROM OSSYS_ENTITY\nWHERE Name LIKE '%' || :entity || '%'",
+      tags: ['team', 'outsystems']
+    }]
+  };
+
+  document.addEventListener('deviceready', function () {
+    var inspector = cordova.plugins.DbInspector;
+    log('Ready. Plugin: ' + (inspector ? 'loaded' : 'MISSING'));
+    document.getElementById('open').onclick = function () {
+      inspector.open().catch(log);
+    };
+    document.getElementById('openPresets').onclick = function () {
+      inspector.open({ title: 'Team DB Inspector', presets: TEAM_PRESETS }).catch(log);
+    };
+    document.getElementById('list').onclick = function () {
+      inspector.listDatabases().then(log, log);
+    };
+  });
+</script>
+</body>
+</html>

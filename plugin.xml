@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<plugin xmlns="http://apache.org/cordova/ns/plugins/1.0"
+    id="cordova-plugin-db-inspector"
+    version="1.0.0"
+    xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <name>DbInspector</name>
+    <description>Read-only, on-device SQLite inspector and visual query builder</description>
+    <author>Henrique Silva</author>
+    <license>Apache-2.0</license>
+    <keywords>sqlite,database,inspector,debug,query-builder,outsystems,capacitor</keywords>
+    <repo>https://github.com/henriquefps/cordova-plugin-db-inspector.git</repo>
+    <issue>https://github.com/henriquefps/cordova-plugin-db-inspector/issues</issue>
+
+    <engines>
+        <engine name="cordova-android" version=">=10.0.0" />
+        <engine name="cordova-ios" version=">=6.0.0" />
+    </engines>
+
+    <js-module src="www/DbInspector.js" name="DbInspector">
+        <clobbers target="cordova.plugins.DbInspector" />
+    </js-module>
+
+    <platform name="android">
+        <config-file parent="/*" target="res/xml/config.xml">
+            <feature name="DbInspector">
+                <param name="android-package" value="com.hfps.dbinspector.DbInspectorPlugin"/>
+            </feature>
+        </config-file>
+
+        <config-file target="AndroidManifest.xml" parent="/manifest/application">
+            <activity
+                android:name="com.hfps.dbinspector.DbInspectorActivity"
+                android:exported="false"
+                android:label="DB Inspector"
+                android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode|smallestScreenSize"
+                android:windowSoftInputMode="adjustResize"
+                android:theme="@android:style/Theme.DeviceDefault.Light.NoActionBar" />
+        </config-file>
+
+        <source-file src="src/android/DbInspectorPlugin.java" target-dir="src/com/hfps/dbinspector"/>
+        <source-file src="src/android/DbInspectorActivity.java" target-dir="src/com/hfps/dbinspector"/>
+        <source-file src="src/android/DbInspectorEngine.java" target-dir="src/com/hfps/dbinspector"/>
+        <resource-file src="www/inspector/db-inspector.html" target="assets/db-inspector.html" />
+    </platform>
+
+    <platform name="ios">
+        <config-file target="config.xml" parent="/*">
+            <feature name="DbInspector">
+                <param name="ios-package" value="DbInspectorPlugin"/>
+            </feature>
+        </config-file>
+
+        <header-file src="src/ios/DbInspectorPlugin.h" />
+        <source-file src="src/ios/DbInspectorPlugin.m" />
+        <header-file src="src/ios/DbInspectorEngine.h" />
+        <source-file src="src/ios/DbInspectorEngine.m" />
+        <header-file src="src/ios/DbInspectorViewController.h" />
+        <source-file src="src/ios/DbInspectorViewController.m" />
+        <resource-file src="www/inspector/db-inspector.html" />
+        <framework src="libsqlite3.tbd" />
+        <framework src="WebKit.framework" />
+    </platform>
+</plugin>

@@ -1,0 +1,57 @@
+/* Web-only chrome around db-inspector.html: landing screen and drag & drop hint.
+   Uses the inspector's own design tokens, so it follows its light/dark theme. */
+.dbi-landing {
+  position: fixed; inset: 0; z-index: 90; overflow: auto;
+  display: flex; align-items: center; justify-content: center;
+  padding: max(24px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
+  background:
+    radial-gradient(1200px 600px at 10% -10%, rgba(99, 102, 241, .16), transparent 60%),
+    radial-gradient(900px 500px at 110% 110%, rgba(139, 92, 246, .14), transparent 60%),
+    var(--bg);
+  transition: opacity .25s ease;
+}
+.dbi-landing.dbi-hide { opacity: 0; pointer-events: none; }
+.dbi-card {
+  width: 100%; max-width: 640px; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 20px; box-shadow: var(--shadow-lg); padding: 28px;
+}
+.dbi-brand { display: flex; align-items: center; gap: 10px; font-weight: 750; font-size: 15px; color: var(--text-2); }
+.dbi-logo {
+  width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; color: #fff;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+}
+.dbi-logo svg, .dbi-drop svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.dbi-card h1 { font-size: clamp(24px, 5vw, 32px); line-height: 1.15; letter-spacing: -.02em; margin: 18px 0 10px; }
+.dbi-lead { color: var(--text-2); font-size: 15px; margin: 0 0 20px; }
+.dbi-drop {
+  display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; cursor: pointer;
+  border: 2px dashed var(--border-strong); border-radius: 16px; padding: 28px 16px; background: var(--surface-2);
+  transition: border-color .15s ease, background .15s ease;
+}
+.dbi-drop:hover { border-color: var(--primary); background: var(--primary-2); }
+.dbi-drop svg { width: 30px; height: 30px; color: var(--primary); margin-bottom: 4px; }
+.dbi-drop b { font-size: 16px; }
+.dbi-drop span { color: var(--muted); font-size: 13px; max-width: 420px; }
+.dbi-actions { display: flex; justify-content: center; margin: 14px 0 6px; }
+.dbi-btn {
+  font: inherit; font-weight: 650; font-size: 14px; border: 1px solid var(--border); background: var(--surface);
+  color: var(--primary-text); border-radius: 10px; padding: 9px 16px; cursor: pointer;
+}
+.dbi-btn:hover { border-color: var(--primary); }
+.dbi-btn:disabled { opacity: .6; cursor: default; }
+.dbi-points { list-style: none; padding: 0; margin: 18px 0 0; display: grid; gap: 10px; }
+.dbi-points li { font-size: 13.5px; color: var(--text-2); padding-left: 26px; position: relative; }
+.dbi-points li::before {
+  content: ''; position: absolute; left: 0; top: 3px; width: 16px; height: 16px; border-radius: 50%;
+  background: var(--success-2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23059669' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E") center / 10px no-repeat;
+}
+.dbi-points b { color: var(--text); }
+.dbi-foot { margin: 20px 0 0; padding-top: 16px; border-top: 1px solid var(--border); font-size: 12.5px; color: var(--muted); }
+.dbi-foot a { color: var(--primary-text); font-weight: 600; }
+.dbi-dragging {
+  position: fixed; inset: 0; z-index: 200; display: none; align-items: center; justify-content: center; pointer-events: none;
+  background: rgba(79, 70, 229, .12); border: 3px dashed var(--primary);
+}
+.dbi-dragging.on { display: flex; }
+.dbi-dragging div { background: var(--primary); color: #fff; font-weight: 700; padding: 12px 18px; border-radius: 12px; box-shadow: var(--shadow-lg); }
+@media (max-width: 480px) { .dbi-card { padding: 20px; } }

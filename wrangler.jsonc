@@ -1,0 +1,9 @@
+{
+  // Cloudflare Pages project for the browser version of the inspector (see docs/web.md).
+  // Build with `npm run web:build`, preview with `npx wrangler pages dev`, deploy with
+  // `npx wrangler pages deploy`.
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "db-inspector",
+  "pages_build_output_dir": "./site",
+  "compatibility_date": "2026-09-01"
+}

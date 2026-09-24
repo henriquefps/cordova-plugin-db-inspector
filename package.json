@@ -1,0 +1,63 @@
+{
+  "name": "cordova-plugin-db-inspector",
+  "version": "1.0.0",
+  "description": "Read-only, on-device SQLite inspector and visual query builder for Cordova, Capacitor and OutSystems mobile apps (Android + iOS)",
+  "author": "Henrique Silva <contact@hfps.dev> (https://hfps.dev)",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/henriquefps/cordova-plugin-db-inspector.git"
+  },
+  "bugs": {
+    "url": "https://github.com/henriquefps/cordova-plugin-db-inspector/issues"
+  },
+  "homepage": "https://github.com/henriquefps/cordova-plugin-db-inspector#readme",
+  "cordova": {
+    "id": "cordova-plugin-db-inspector",
+    "platforms": [
+      "android",
+      "ios"
+    ]
+  },
+  "engines": {
+    "cordovaDependencies": {
+      "1.0.0": {
+        "cordova-android": ">=10.0.0",
+        "cordova-ios": ">=6.0.0"
+      }
+    }
+  },
+  "files": [
+    "plugin.xml",
+    "www/",
+    "src/",
+    "docs/",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "scripts": {
+    "dev": "python3 dev/server.py",
+    "web:build": "node web/build.mjs",
+    "web:dev": "node web/build.mjs && wrangler pages dev",
+    "web:deploy": "node web/build.mjs && wrangler pages deploy"
+  },
+  "devDependencies": {
+    "wa-sqlite": "1.0.0",
+    "wrangler": "^4.138.0"
+  },
+  "keywords": [
+    "ecosystem:cordova",
+    "cordova-android",
+    "cordova-ios",
+    "capacitor",
+    "outsystems",
+    "sqlite",
+    "database",
+    "inspector",
+    "debug",
+    "query-builder",
+    "devtools"
+  ]
+}

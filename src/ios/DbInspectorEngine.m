@@ -165,10 +165,26 @@ static NSString *DbiQ(NSString *identifier) {
     sqlite3_finalize(stmt);
     DbiFail(msg);
   }
+  int expected = sqlite3_bind_parameter_count(stmt);
+  if ((int)args.count > expected) {
+    sqlite3_finalize(stmt);
+    DbiFail([NSString stringWithFormat:@"Too many parameter values: the statement has %d parameter%@, got %lu.", expected, expected == 1 ? @"" : @"s", (unsigned long)args.count]);
+  }
   for (NSUInteger i = 0; i < args.count; i++) {
     id a = args[i];
-    if ([a isKindOfClass:[NSNumber class]]) sqlite3_bind_int64(stmt, (int)i + 1, [a longLongValue]);
-    else sqlite3_bind_text(stmt, (int)i + 1, [[a description] UTF8String], -1, SQLITE_TRANSIENT);
+    int idx = (int)i + 1;
+    if (a == [NSNull null]) {
+      sqlite3_bind_null(stmt, idx);
+    } else if ([a isKindOfClass:[NSNumber class]]) {
+      // Booleans are bound as 0/1; whole numbers as integers; everything else as a double.
+      double d = [a doubleValue];
+      if (CFGetTypeID((__bridge CFTypeRef)a) == CFBooleanGetTypeID()) sqlite3_bind_int64(stmt, idx, [a boolValue] ? 1 : 0);
+      else if (!CFNumberIsFloatType((__bridge CFNumberRef)a)) sqlite3_bind_int64(stmt, idx, [a longLongValue]);
+      else if (d == floor(d) && fabs(d) <= 9007199254740991.0) sqlite3_bind_int64(stmt, idx, (sqlite3_int64)d);
+      else sqlite3_bind_double(stmt, idx, d);
+    } else {
+      sqlite3_bind_text(stmt, idx, [[a description] UTF8String], -1, SQLITE_TRANSIENT);
+    }
   }
   return stmt;
 }
@@ -533,6 +549,137 @@ static id DbiNumber(sqlite3_stmt *stmt, int i) {
   } @finally {
     atomic_store(&_running, NULL);
   }
+}
+
+#pragma mark - Headless batch (runQueries JS API)
+
+static const int kBatchMaxRows = 10000;
+
+- (NSDictionary *)findDatabase:(NSString *)idOrName {
+  NSArray<NSDictionary *> *all = [self listDatabases];
+  NSDictionary *encrypted = nil;
+  for (int pass = 0; pass < 2; pass++) {
+    for (NSDictionary *d in all) {
+      BOOL match = pass == 0 ? [d[@"id"] isEqual:idOrName] : [d[@"name"] isEqual:idOrName];
+      if (!match) continue;
+      if (![d[@"encrypted"] boolValue]) return d;
+      if (!encrypted) encrypted = d;
+    }
+  }
+  if (encrypted) DbiFail([NSString stringWithFormat:@"Database %@ is encrypted (no plaintext SQLite header). Encrypted databases are not supported.", idOrName]);
+  DbiFail([NSString stringWithFormat:@"Database not found: %@", idOrName]);
+  return @{};
+}
+
+/** First keyword of a statement, upper-cased, skipping whitespace, comments and parentheses. */
+static NSString *DbiFirstKeyword(NSString *sql) {
+  NSUInteger i = 0, n = sql.length;
+  NSCharacterSet *ws = NSCharacterSet.whitespaceAndNewlineCharacterSet;
+  while (i < n) {
+    unichar c = [sql characterAtIndex:i];
+    unichar next = i + 1 < n ? [sql characterAtIndex:i + 1] : 0;
+    if ([ws characterIsMember:c] || c == '(') {
+      i++;
+    } else if (c == '-' && next == '-') {
+      NSRange r = [sql rangeOfString:@"\n" options:0 range:NSMakeRange(i, n - i)];
+      i = r.location == NSNotFound ? n : r.location + 1;
+    } else if (c == '/' && next == '*') {
+      NSRange r = [sql rangeOfString:@"*/" options:0 range:NSMakeRange(i + 2, n - i - 2)];
+      i = r.location == NSNotFound ? n : r.location + 2;
+    } else {
+      break;
+    }
+  }
+  NSUInteger start = i;
+  while (i < n && [NSCharacterSet.letterCharacterSet characterIsMember:[sql characterAtIndex:i]]) i++;
+  return [[sql substringWithRange:NSMakeRange(start, i - start)] uppercaseString];
+}
+
+/** Full value of a cell for the headless API: no previews; BLOBs as base64. */
+static id DbiPlainCell(sqlite3_stmt *stmt, int i) {
+  switch (sqlite3_column_type(stmt, i)) {
+    case SQLITE_NULL: return [NSNull null];
+    case SQLITE_INTEGER: case SQLITE_FLOAT: return DbiNumber(stmt, i);
+    case SQLITE_BLOB: {
+      const void *b = sqlite3_column_blob(stmt, i);
+      int n = sqlite3_column_bytes(stmt, i);
+      return b ? [[NSData dataWithBytes:b length:n] base64EncodedStringWithOptions:0] : @"";
+    }
+    default: return DbiText(stmt, i);
+  }
+}
+
+- (void)runBatchQuery:(sqlite3 *)db query:(NSDictionary *)q into:(NSMutableDictionary *)out {
+  NSString *sql = [q[@"sql"] isKindOfClass:[NSString class]] ? q[@"sql"] : @"";
+  sql = [sql stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+  while ([sql hasSuffix:@";"]) sql = [[sql substringToIndex:sql.length - 1] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+  NSString *keyword = DbiFirstKeyword(sql);
+  if (![@[@"SELECT", @"WITH", @"VALUES", @"PRAGMA", @"EXPLAIN"] containsObject:keyword]) {
+    DbiFail([NSString stringWithFormat:@"Only read statements (SELECT, WITH, VALUES, PRAGMA, EXPLAIN) can run here%@",
+             keyword.length ? [NSString stringWithFormat:@", not %@.", keyword] : @"."]);
+  }
+  int maxRows = MIN(kBatchMaxRows, MAX(1, [q[@"maxRows"] isKindOfClass:[NSNumber class]] ? [q[@"maxRows"] intValue] : 1000));
+  NSArray *args = [q[@"args"] isKindOfClass:[NSArray class]] ? q[@"args"] : @[];
+
+  sqlite3_stmt *stmt = [self prepare:db sql:sql args:args];
+  int n = sqlite3_column_count(stmt);
+  NSMutableArray *cols = [NSMutableArray arrayWithCapacity:n];
+  for (int i = 0; i < n; i++) {
+    const char *name = sqlite3_column_name(stmt, i);
+    [cols addObject:name ? @(name) : @"?"];
+  }
+  NSMutableArray *rows = [NSMutableArray array];
+  BOOL truncated = NO;
+  int rc;
+  while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
+    if ((int)rows.count >= maxRows) { truncated = YES; break; }
+    NSMutableArray *row = [NSMutableArray arrayWithCapacity:n];
+    for (int i = 0; i < n; i++) [row addObject:DbiPlainCell(stmt, i)];
+    [rows addObject:row];
+  }
+  if (rc != SQLITE_DONE && rc != SQLITE_ROW) [self stepFailed:db stmt:stmt rc:rc];
+  sqlite3_finalize(stmt);
+  out[@"columns"] = cols;
+  out[@"rows"] = rows;
+  out[@"truncated"] = @(truncated);
+}
+
+- (NSDictionary *)runQueries:(NSDictionary *)request {
+  CFAbsoluteTime batchStart = CFAbsoluteTimeGetCurrent();
+  NSString *want = [request[@"database"] isKindOfClass:[NSString class]] ? request[@"database"] : @"";
+  NSDictionary *target = [self findDatabase:want];
+  NSString *dbId = target[@"id"];
+  sqlite3 *db = [self db:dbId];
+  NSArray *queries = request[@"queries"];
+  if (![queries isKindOfClass:[NSArray class]]) DbiFail(@"queries must be an array");
+
+  NSMutableArray *results = [NSMutableArray arrayWithCapacity:queries.count];
+  for (id item in queries) {
+    NSMutableDictionary *r = [@{@"columns": @[], @"rows": @[], @"truncated": @NO, @"durationMs": @0, @"error": [NSNull null]} mutableCopy];
+    NSDictionary *q = [item isKindOfClass:[NSDictionary class]] ? item : nil;
+    if (!q) {
+      r[@"error"] = @"Invalid query";
+    } else if ([q[@"error"] isKindOfClass:[NSString class]]) {
+      r[@"error"] = q[@"error"];
+    } else {
+      CFAbsoluteTime start = CFAbsoluteTimeGetCurrent();
+      @try {
+        [self runBatchQuery:db query:q into:r];
+      } @catch (NSException *e) {
+        r[@"columns"] = @[];
+        r[@"rows"] = @[];
+        r[@"truncated"] = @NO;
+        r[@"error"] = e.reason ?: e.name;
+      }
+      r[@"durationMs"] = @((CFAbsoluteTimeGetCurrent() - start) * 1000.0);
+    }
+    [results addObject:r];
+  }
+  return @{
+    @"database": @{@"id": dbId, @"name": target[@"name"] ?: @""},
+    @"durationMs": @((CFAbsoluteTimeGetCurrent() - batchStart) * 1000.0),
+    @"results": results
+  };
 }
 
 #pragma mark - Database-level info

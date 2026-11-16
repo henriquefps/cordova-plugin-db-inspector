@@ -2,6 +2,8 @@
 
 Presets are saved queries: a name, a description, SQL (optionally with `:parameters`), tags, an optional database scope, and optionally the visual builder state they were made with. They can be created in the inspector, exported and imported as JSON, and shipped with the app through `open({ presets })`.
 
+The same document can be run without the UI: pass it as `queries` to `runQueries()` (see [Running queries without the UI](integration.md#running-queries-without-the-ui)). There, parameters are bound as real SQLite values instead of inlined, and come from `params`; `database`, `builder` and the other preset fields are ignored.
+
 ## File format
 
 ```json

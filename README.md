@@ -55,10 +55,11 @@ Hybrid apps keep most of their state in local SQLite: offline data, sync queues,
 
 - **Read-only.** Every connection is opened with `SQLITE_OPEN_READONLY`, so nothing in the inspector, including SQL typed in the console, can modify the app's data.
 - **No SQLCipher.** Encrypted databases are listed but never opened. The plugin doesn't try to obtain another plugin's key.
-- **No permissions, no network, no background work.** Files are saved and imported through the system pickers. The plugin does nothing until `open()` is called.
+- **No permissions, no network, no background work.** Files are saved and imported through the system pickers. The plugin does nothing until `open()` or `runQueries()` is called.
+- **Read statements only, headless too.** `runQueries()` uses the same read-only connection and accepts only `SELECT`, `WITH`, `VALUES`, `PRAGMA` and `EXPLAIN`.
 - **Not exported.** The Android activity can't be launched by other apps.
 
-> ⚠️ **Don't ship an open door.** The inspector shows everything in local storage to whoever holds the device. Use it in debug/support builds, or gate `open()` behind a support role or a hidden gesture. See [Keeping it out of production](docs/integration.md#keeping-it-out-of-production).
+> ⚠️ **Don't ship an open door.** The inspector shows everything in local storage to whoever holds the device. Use it in debug/support builds, or gate `open()` behind a support role or a hidden gesture. `runQueries()` lets any JavaScript in the app read the local databases without showing the UI, so gate it exactly like `open()`. See [Keeping it out of production](docs/integration.md#keeping-it-out-of-production).
 
 ## Compatibility
 
@@ -86,7 +87,7 @@ npx cap sync
 **OutSystems:** create a library or module with this Extensibility Configuration, then call the plugin from a client action:
 
 ```json
-{ "plugin": { "url": "https://github.com/henriquefps/cordova-plugin-db-inspector.git#v1.0.0" } }
+{ "plugin": { "url": "https://github.com/henriquefps/cordova-plugin-db-inspector.git#v1.1.0" } }
 ```
 
 The full [integration guide](docs/integration.md) covers Cordova, Capacitor and OutSystems, the client actions, production gating and troubleshooting.
@@ -109,7 +110,26 @@ const dbs = await cordova.plugins.DbInspector.listDatabases();
 // → [{ id: 'databases/bg_sync.db', name: 'bg_sync.db', size: 45056, walSize: 0, encrypted: false, … }]
 ```
 
-Both methods return Promises and also accept `(success, error)` callbacks.
+### Run queries without the UI
+
+`runQueries()` runs a batch of read-only queries against one database and resolves with plain JSON. It's for automated extraction, checks or syncing from app code, for example an OutSystems client action:
+
+```javascript
+const out = await cordova.plugins.DbInspector.runQueries({
+  database: 'bg_sync.db',                 // file name or id, like open({ database })
+  queries: [
+    { name: 'pending', sql: 'SELECT * FROM sync_queue WHERE Status = :s', params: { s: 1 } },
+    { name: 'count', sql: 'SELECT count(*) AS n FROM sync_queue' }
+  ],                                      // or a presets document, or a JSON string of either
+  maxRows: 1000                           // per query; default 1000, max 10000
+});
+// → { database: { id, name }, startedAt, durationMs,
+//     results: [{ name, sql, columns, rows: [{ Id: 1, … }], rowCount, truncated, durationMs, error }] }
+```
+
+`options` can also be a JSON string. A query that fails gets its own `error` and the rest of the batch still runs. The promise rejects only when the batch can't run (unknown or encrypted database, invalid input). BLOBs come back as base64, and integers beyond 2^53 as strings. Details: [Running queries without the UI](docs/integration.md#running-queries-without-the-ui).
+
+All methods return Promises and also accept `(success, error)` callbacks.
 
 ## Presets
 
@@ -130,7 +150,7 @@ Both methods return Promises and also accept `(success, error)` callbacks.
 }
 ```
 
-Presets are merged by `id`. Import also accepts a bare array or a single preset. See [docs/presets.md](docs/presets.md) for every field, the merge rules, parameters and the builder state.
+Presets are merged by `id`. Import also accepts a bare array or a single preset. See [docs/presets.md](docs/presets.md) for every field, the merge rules, parameters and the builder state. The same document can be passed to `runQueries()` to run the presets headlessly.
 
 ## Web version — [db-inspector.hfps.dev](https://db-inspector.hfps.dev)
 

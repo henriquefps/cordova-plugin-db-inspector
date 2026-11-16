@@ -30,6 +30,21 @@ public class DbInspectorPlugin extends CordovaPlugin {
                 });
                 return true;
             }
+            case "runQueries": {
+                JSONObject request = args.optJSONObject(0);
+                cordova.getThreadPool().execute(() -> {
+                    DbInspectorEngine engine = new DbInspectorEngine(cordova.getContext());
+                    try {
+                        if (request == null) throw new IllegalArgumentException("Missing options");
+                        callbackContext.success(engine.runQueries(request));
+                    } catch (Exception e) {
+                        callbackContext.error(e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
+                    } finally {
+                        engine.closeAll();
+                    }
+                });
+                return true;
+            }
             default:
                 return false;
         }

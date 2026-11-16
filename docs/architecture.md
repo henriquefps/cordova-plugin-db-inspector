@@ -4,14 +4,14 @@
 
 ```
 plugin.xml                        Cordova manifest (Android + iOS)
-www/DbInspector.js                JS API: open(), listDatabases()
+www/DbInspector.js                JS API: open(), listDatabases(), runQueries() (input parsing, parameter rewriting)
 www/inspector/db-inspector.html   The whole inspector UI — one self-contained file, no dependencies, works offline
 src/android/
-  DbInspectorPlugin.java          CordovaPlugin: starts the activity / lists databases
+  DbInspectorPlugin.java          CordovaPlugin: starts the activity / lists databases / runs headless query batches
   DbInspectorActivity.java        Full-screen WebView host, bridge, Storage Access Framework, insets, back handling
   DbInspectorEngine.java          Discovery + read-only SQLite introspection (android.database.sqlite)
 src/ios/
-  DbInspectorPlugin.{h,m}         CDVPlugin: presents the view controller / lists databases
+  DbInspectorPlugin.{h,m}         CDVPlugin: presents the view controller / lists databases / runs headless query batches
   DbInspectorViewController.{h,m} Full-screen WKWebView host, bridge, share sheet, document picker
   DbInspectorEngine.{h,m}         Discovery + read-only SQLite introspection (libsqlite3)
 dev/server.py                     Desktop harness: serves the page and a Python bridge over ./test-data
@@ -63,6 +63,25 @@ Work runs on a single serial background thread / queue per inspector instance. T
 | `setTheme` | `dark, color` | matches system bar / background to the page theme |
 | `close` | — | dismisses the screen |
 | `addFiles` | — | web only: opens the file picker, returns the new database ids |
+
+### Headless batches (`runQueries`)
+
+`runQueries()` doesn't use the page bridge. It is a regular Cordova action (`exec('DbInspector', 'runQueries', [request])`) that runs on the Cordova thread pool (Android) or `runInBackground` (iOS), with a fresh `DbInspectorEngine` whose connections are closed afterwards.
+
+The JS module does the input work so both platforms stay small and identical:
+
+1. Parses `options` / `queries` / `params` (objects or JSON strings), accepts a query array or a presets document, clamps `maxRows` (default 1000, max 10000).
+2. Tokenizes each query (skipping literals and comments), rejects a second statement, and rewrites named parameters (`:name`, `@name`, `$name`) to numbered ones (`?1`, `?2`, …) with an `args` array. Positional `?` queries pass through with the array as given. Input errors become that query's `error` without reaching native code.
+3. After native code answers, it turns row arrays into objects keyed by de-duplicated column names and adds `name`, `sql`, `rowCount` and `startedAt`.
+
+Native request and response:
+
+```
+→ {database, queries: [{sql, args: [number|string|null], maxRows} | {error}]}
+← {database: {id, name}, durationMs, results: [{columns, rows: [[cell]], truncated, durationMs, error}]}
+```
+
+The engines (`runQueries` in `DbInspectorEngine.java` / `.m`) resolve the database by id, then by file name (`findDatabase`), refuse encrypted files, check that the statement starts with `SELECT`, `WITH`, `VALUES`, `PRAGMA` or `EXPLAIN`, and bind `args` with their SQLite types. On Android, `rawQuery()` can only bind strings, so the values are bound on the compiled `SQLiteQuery` inside a `CursorFactory`, which also gets the 32 MB window. Cells are returned in full: `null`, number, string, BLOB as base64, and integers beyond ±2^53 as strings.
 
 ### Cell encoding
 

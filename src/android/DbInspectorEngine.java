@@ -496,6 +496,147 @@ final class DbInspectorEngine {
         }
     }
 
+    // ---------------------------------------------------------------------------------------
+    // Headless batch (runQueries JS API)
+    // ---------------------------------------------------------------------------------------
+
+    /** Statements a headless batch may run. Everything else is refused before it is compiled. */
+    private static final String[] BATCH_STATEMENTS = {"SELECT", "WITH", "VALUES", "PRAGMA", "EXPLAIN"};
+    static final int BATCH_MAX_ROWS = 10000;
+
+    /**
+     * Finds a database by id or file name, the same way open({database}) picks one. Encrypted
+     * matches are reported instead of skipped, so the caller gets a clear error.
+     */
+    JSONObject findDatabase(String idOrName) throws JSONException {
+        JSONArray all = listDatabases();
+        JSONObject encrypted = null;
+        for (int pass = 0; pass < 2; pass++) {
+            for (int i = 0; i < all.length(); i++) {
+                JSONObject d = all.getJSONObject(i);
+                boolean match = pass == 0 ? d.optString("id").equals(idOrName) : d.optString("name").equals(idOrName);
+                if (!match) continue;
+                if (!d.optBoolean("encrypted")) return d;
+                if (encrypted == null) encrypted = d;
+            }
+        }
+        if (encrypted != null) {
+            throw new IllegalStateException("Database " + idOrName + " is encrypted (no plaintext SQLite header). Encrypted databases are not supported.");
+        }
+        throw new IllegalArgumentException("Database not found: " + idOrName);
+    }
+
+    /**
+     * Runs each query of a headless batch on the read-only connection. Per-query failures are
+     * reported in that result's "error"; only batch-level problems (unknown or encrypted
+     * database) throw.
+     *
+     * request: {database, queries: [{sql, args: [number|string|null], maxRows} | {error}]}
+     * returns: {database: {id, name}, durationMs, results: [{columns, rows: [[cell]], truncated, durationMs, error}]}
+     * Cells: null, number, string; BLOBs as base64; integers beyond 2^53 as strings.
+     */
+    JSONObject runQueries(JSONObject request) throws JSONException {
+        long batchStart = System.nanoTime();
+        JSONObject target = findDatabase(request.optString("database", ""));
+        String dbId = target.getString("id");
+        SQLiteDatabase db = db(dbId);
+        JSONArray queries = request.optJSONArray("queries");
+        if (queries == null) throw new IllegalArgumentException("queries must be an array");
+
+        JSONArray results = new JSONArray();
+        for (int i = 0; i < queries.length(); i++) {
+            JSONObject q = queries.optJSONObject(i);
+            JSONObject r = new JSONObject()
+                    .put("columns", new JSONArray())
+                    .put("rows", new JSONArray())
+                    .put("truncated", false)
+                    .put("durationMs", 0)
+                    .put("error", JSONObject.NULL);
+            if (q == null) {
+                r.put("error", "Invalid query");
+            } else if (!q.isNull("error") && q.has("error")) {
+                r.put("error", q.optString("error"));
+            } else {
+                long start = System.nanoTime();
+                try {
+                    runBatchQuery(db, q, r);
+                } catch (Exception e) {
+                    r.put("columns", new JSONArray()).put("rows", new JSONArray()).put("truncated", false);
+                    r.put("error", e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
+                }
+                r.put("durationMs", (System.nanoTime() - start) / 1_000_000.0);
+            }
+            results.put(r);
+        }
+        return new JSONObject()
+                .put("database", new JSONObject().put("id", dbId).put("name", target.optString("name")))
+                .put("durationMs", (System.nanoTime() - batchStart) / 1_000_000.0)
+                .put("results", results);
+    }
+
+    private void runBatchQuery(SQLiteDatabase db, JSONObject q, JSONObject out) throws JSONException {
+        String sql = q.optString("sql", "").trim();
+        while (sql.endsWith(";")) sql = sql.substring(0, sql.length() - 1).trim();
+        String keyword = firstKeyword(sql);
+        if (!Arrays.asList(BATCH_STATEMENTS).contains(keyword)) {
+            throw new IllegalArgumentException("Only read statements (SELECT, WITH, VALUES, PRAGMA, EXPLAIN) can run here"
+                    + (keyword.isEmpty() ? "." : ", not " + keyword + "."));
+        }
+        int maxRows = Math.min(BATCH_MAX_ROWS, Math.max(1, q.optInt("maxRows", DEFAULT_QUERY_MAX_ROWS)));
+        JSONArray args = q.optJSONArray("args");
+        try (Cursor cur = rawQueryTyped(db, sql, args)) {
+            String[] cols = cur.getColumnNames();
+            JSONArray rows = new JSONArray();
+            boolean truncated = false;
+            while (cur.moveToNext()) {
+                if (rows.length() >= maxRows) { truncated = true; break; }
+                JSONArray row = new JSONArray();
+                for (int i = 0; i < cols.length; i++) row.put(plainCell(cur, i));
+                rows.put(row);
+            }
+            out.put("columns", new JSONArray(Arrays.asList(cols)))
+                    .put("rows", rows)
+                    .put("truncated", truncated);
+        }
+    }
+
+    /** First keyword of a statement, upper-cased, skipping whitespace, comments and parentheses. */
+    static String firstKeyword(String sql) {
+        int i = 0, n = sql.length();
+        while (i < n) {
+            char c = sql.charAt(i);
+            if (Character.isWhitespace(c) || c == '(') {
+                i++;
+            } else if (c == '-' && i + 1 < n && sql.charAt(i + 1) == '-') {
+                int e = sql.indexOf('\n', i);
+                i = e < 0 ? n : e + 1;
+            } else if (c == '/' && i + 1 < n && sql.charAt(i + 1) == '*') {
+                int e = sql.indexOf("*/", i + 2);
+                i = e < 0 ? n : e + 2;
+            } else {
+                break;
+            }
+        }
+        int start = i;
+        while (i < n && Character.isLetter(sql.charAt(i))) i++;
+        return sql.substring(start, i).toUpperCase(Locale.ROOT);
+    }
+
+    /** Full value of a cell for the headless API: no previews; BLOBs as base64. */
+    private static Object plainCell(Cursor cur, int idx) {
+        switch (cur.getType(idx)) {
+            case Cursor.FIELD_TYPE_NULL:
+                return JSONObject.NULL;
+            case Cursor.FIELD_TYPE_INTEGER:
+            case Cursor.FIELD_TYPE_FLOAT:
+                return numberValue(cur, idx);
+            case Cursor.FIELD_TYPE_BLOB:
+                return Base64.encodeToString(cur.getBlob(idx), Base64.NO_WRAP);
+            default:
+                return cur.getString(idx);
+        }
+    }
+
     void interrupt() {
         CancellationSignal s = activeSignal;
         if (s != null) s.cancel();
@@ -613,9 +754,22 @@ final class DbInspectorEngine {
     // ---------------------------------------------------------------------------------------
 
     private Cursor rawQueryLarge(SQLiteDatabase db, String sql, String[] args, CancellationSignal signal) {
+        return rawQueryLarge(db, sql, args, null, signal);
+    }
+
+    /**
+     * Typed binding: rawQuery() can only bind strings, so values from a JSON array are bound on
+     * the compiled query (before it first steps) with their real SQLite types.
+     */
+    private Cursor rawQueryTyped(SQLiteDatabase db, String sql, JSONArray typedArgs) {
+        return rawQueryLarge(db, sql, null, typedArgs, null);
+    }
+
+    private Cursor rawQueryLarge(SQLiteDatabase db, String sql, String[] args, final JSONArray typedArgs, CancellationSignal signal) {
         SQLiteDatabase.CursorFactory factory = new SQLiteDatabase.CursorFactory() {
             @Override
             public Cursor newCursor(SQLiteDatabase d, SQLiteCursorDriver driver, String editTable, SQLiteQuery query) {
+                if (typedArgs != null) bindTyped(query, typedArgs);
                 SQLiteCursor cursor = new SQLiteCursor(driver, editTable, query);
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                     cursor.setWindow(new CursorWindow("db-inspector", LARGE_WINDOW_BYTES));
@@ -624,6 +778,26 @@ final class DbInspectorEngine {
             }
         };
         return db.rawQueryWithFactory(factory, sql, args, null, signal);
+    }
+
+    private static void bindTyped(SQLiteQuery query, JSONArray args) {
+        for (int i = 0; i < args.length(); i++) {
+            Object v = args.opt(i);
+            int index = i + 1;
+            if (v == null || v == JSONObject.NULL) {
+                query.bindNull(index);
+            } else if (v instanceof Integer || v instanceof Long) {
+                query.bindLong(index, ((Number) v).longValue());
+            } else if (v instanceof Number) {
+                double d = ((Number) v).doubleValue();
+                if (d == Math.rint(d) && Math.abs(d) <= 9007199254740991.0) query.bindLong(index, (long) d);
+                else query.bindDouble(index, d);
+            } else if (v instanceof Boolean) {
+                query.bindLong(index, ((Boolean) v) ? 1 : 0);
+            } else {
+                query.bindString(index, v.toString());
+            }
+        }
     }
 
     /**

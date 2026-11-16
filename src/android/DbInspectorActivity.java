@@ -91,6 +91,9 @@ public class DbInspectorActivity extends Activity {
     /**
      * Android 15+ forces edge-to-edge; pad the page by the system bars (and the keyboard) so
      * the header never sits under the status bar and inputs stay visible while typing.
+     * The insets are consumed here: the WebView already sits inside the padding, and recent
+     * WebView versions would otherwise also report them as env(safe-area-inset-*), which the
+     * page adds again (an empty band under the status bar). iOS keeps relying on env().
      */
     private void applyInsets() {
         root.setOnApplyWindowInsetsListener((v, insets) -> {
@@ -105,7 +108,9 @@ public class DbInspectorActivity extends Activity {
                 right = insets.getSystemWindowInsetRight(); bottom = insets.getSystemWindowInsetBottom();
             }
             v.setPadding(left, top, right, bottom);
-            return insets;
+            return Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+                    ? WindowInsets.CONSUMED
+                    : insets.consumeSystemWindowInsets();
         });
     }
 

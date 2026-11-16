@@ -10,6 +10,9 @@ All notable changes to this project are documented here. The format follows [Kee
 - Status bar colour sent to the native host (`setTheme`) now matches the tinted header: `#f0f4f9` light, `#090c10` dark.
 - Web site: new landing card, new app icon and favicon set (`favicon.ico`, `icon.svg`, `apple-touch-icon.png`, built from `scripts/glyph.svg`), light and dark `theme-color`.
 
+### Fixed
+- Android: no more empty band under the status bar. The activity pads its content by the system bars and now consumes those insets, so newer WebView versions no longer also report them as `env(safe-area-inset-*)` (the inset was applied twice). iOS is unchanged.
+
 ## [1.1.0] - 2026-11-16
 
 ### Added

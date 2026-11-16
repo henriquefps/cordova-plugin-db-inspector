@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Changed
+- New look for the inspector and the web site, in the hfps identity (blue palette): OKLCH colour tokens for light and dark, Inter, Phosphor icons, header and tabs on a tinted background with the content in one rounded card, 12px minimum text size and sentence-case labels. Contrast meets WCAG AA in both themes. Behaviour is unchanged.
+- Inter (latin subset, weights 400 to 600, about 34 KB as base64) is embedded in `db-inspector.html`, so the page stays self-contained and works offline in the app. The site's Content-Security-Policy adds `font-src data:` for it.
+- Status bar colour sent to the native host (`setTheme`) now matches the tinted header: `#f0f4f9` light, `#090c10` dark.
+- Web site: new landing card, new app icon and favicon set (`favicon.ico`, `icon.svg`, `apple-touch-icon.png`, built from `scripts/glyph.svg`), light and dark `theme-color`.
+
 ## [1.1.0] - 2026-11-16
 
 ### Added

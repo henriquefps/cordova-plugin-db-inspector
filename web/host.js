@@ -185,8 +185,8 @@
       });
     },
     setTheme: function (a) {
-      var meta = document.querySelector('meta[name="theme-color"]');
-      if (meta) meta.setAttribute('content', a.color || (a.dark ? '#151b24' : '#ffffff'));
+      var metas = document.querySelectorAll('meta[name="theme-color"]');
+      for (var i = 0; i < metas.length; i++) metas[i].setAttribute('content', a.color || (a.dark ? '#090c10' : '#f0f4f9'));
       document.documentElement.classList.toggle('dbi-dark', !!a.dark);
       return true;
     },
@@ -222,22 +222,25 @@
     if (landing) { landing.classList.add('dbi-hide'); setTimeout(function () { if (landing) landing.remove(); landing = null; }, 250); }
   }
 
+  var CHECK = '<svg viewBox="0 0 256 256" aria-hidden="true"><path d="M232.49,80.49l-128,128a12,12,0,0,1-17,0l-56-56a12,12,0,1,1,17-17L96,183,215.51,63.51a12,12,0,0,1,17,17Z"/></svg>';
+
   function showLanding() {
     landing = document.createElement('div');
     landing.className = 'dbi-landing';
     landing.innerHTML =
       '<div class="dbi-card">' +
-      '<div class="dbi-brand"><span class="dbi-logo"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg></span>DB Inspector</div>' +
-      '<h1>Inspect a SQLite database<br>right in your browser</h1>' +
+      '<div class="dbi-brand"><span class="dbi-logo"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M196,35.52C177.62,25.51,153.48,20,128,20S78.38,25.51,60,35.52C39.37,46.79,28,62.58,28,80v96c0,17.42,11.37,33.21,32,44.48,18.35,10,42.49,15.52,68,15.52s49.62-5.51,68-15.52c20.66-11.27,32-27.06,32-44.48V80C228,62.58,216.63,46.79,196,35.52ZM204,128c0,17-31.21,36-76,36s-76-19-76-36v-8.46a88.9,88.9,0,0,0,8,4.94c18.35,10,42.49,15.52,68,15.52s49.62-5.51,68-15.52a88.9,88.9,0,0,0,8-4.94ZM128,44c44.79,0,76,19,76,36s-31.21,36-76,36S52,97,52,80,83.21,44,128,44Zm0,168c-44.79,0-76-19-76-36v-8.46a88.9,88.9,0,0,0,8,4.94c18.35,10,42.49,15.52,68,15.52s49.62-5.51,68-15.52a88.9,88.9,0,0,0,8-4.94V176C204,193,172.79,212,128,212Z"/></svg></span>DB Inspector</div>' +
+      '<p class="dbi-eyebrow">Open-source SQLite inspector</p>' +
+      '<h1>Inspect a SQLite database right in your browser</h1>' +
       '<p class="dbi-lead">Browse tables and data, read the structure, build queries visually and save presets. Made for Cordova, Capacitor and OutSystems mobile databases, and it works with any SQLite file.</p>' +
       '<label class="dbi-drop" id="dbiDrop"><input type="file" id="dbiInput" multiple hidden>' +
-      '<svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>' +
+      '<span class="dbi-drop-ico"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M224,144v64a8,8,0,0,1-8,8H40a8,8,0,0,1-8-8V144a8,8,0,0,1,16,0v56H208V144a8,8,0,0,1,16,0ZM93.66,77.66,120,51.31V144a8,8,0,0,0,16,0V51.31l26.34,26.35a8,8,0,0,0,11.32-11.32l-40-40a8,8,0,0,0-11.32,0l-40,40A8,8,0,0,0,93.66,77.66Z"/></svg></span>' +
       '<b>Drop your .db file here</b><span>or click to choose. Add its <code>-wal</code> file too, to include changes that haven’t been checkpointed yet.</span></label>' +
       '<div class="dbi-actions"><button class="dbi-btn" id="dbiDemo">Try the demo database</button></div>' +
       '<ul class="dbi-points">' +
-      '<li><b>Your file never leaves this device.</b> SQLite runs locally in WebAssembly. Nothing is uploaded, and the page’s security policy blocks connections to any other site.</li>' +
-      '<li><b>Read-only.</b> Databases are opened read-only; your file is never modified.</li>' +
-      '<li><b>Large files welcome.</b> Pages are read on demand, so a 500 MB database opens in a moment.</li>' +
+      '<li>' + CHECK + '<span><b>Your file never leaves this device.</b> SQLite runs locally in WebAssembly. Nothing is uploaded, and the page’s security policy blocks connections to any other site.</span></li>' +
+      '<li>' + CHECK + '<span><b>Read-only.</b> Databases are opened read-only; your file is never modified.</span></li>' +
+      '<li>' + CHECK + '<span><b>Large files welcome.</b> Pages are read on demand, so a 500 MB database opens in a moment.</span></li>' +
       '</ul>' +
       '<p class="dbi-foot">The same inspector ships inside apps as <a href="' + REPO_URL + '" target="_blank" rel="noopener">cordova-plugin-db-inspector</a>, an open-source Cordova/Capacitor plugin (Apache 2.0). ' +
       'Tip: in the app, <em>Info → Export database file</em> produces a single consistent file you can open here.</p>' +
@@ -264,7 +267,7 @@
     var depth = 0;
     var hint = document.createElement('div');
     hint.className = 'dbi-dragging';
-    hint.innerHTML = '<div>Drop to open — the file stays on this device</div>';
+    hint.innerHTML = '<div>Drop to open. The file stays on this device.</div>';
     document.body.appendChild(hint);
     window.addEventListener('dragenter', function (e) {
       if (!e.dataTransfer || Array.prototype.indexOf.call(e.dataTransfer.types, 'Files') < 0) return;

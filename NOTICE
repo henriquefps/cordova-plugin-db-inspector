@@ -2,3 +2,9 @@ cordova-plugin-db-inspector
 Copyright 2026 Henrique Silva
 
 This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+Third-party material bundled in www/inspector/db-inspector.html:
+- Inter (subset), Copyright 2016 The Inter Project Authors (https://github.com/rsms/inter),
+  licensed under the SIL Open Font License, Version 1.1 (https://openfontlicense.org).
+- Phosphor Icons (icon paths, also used in scripts/glyph.svg and web/host.js), Copyright (c) 2023 Phosphor Icons
+  (https://phosphoricons.com), licensed under the MIT License.

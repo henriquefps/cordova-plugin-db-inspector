@@ -77,7 +77,8 @@ The site needs module Web Workers, `FileReaderSync` and WebAssembly: current Chr
 
 ```
 web/host.js            page-side host: bridge, files, downloads, localStorage, landing, drag & drop
-web/host.css           landing / drag & drop styling (uses the inspector's design tokens)
+web/host.css           landing / drag & drop styling (uses the inspector's hfps design tokens)
+web/icon.svg, favicon.ico, apple-touch-icon.png   site icons, built from scripts/glyph.svg (hfps-kit build-icons.mjs)
 web/worker.js          the engine: actions over wa-sqlite
 web/lazy-file-vfs.js   read-only lazy File VFS with WAL overlay
 web/build.mjs          builds site/ and _headers (CSP with the inline script hash)

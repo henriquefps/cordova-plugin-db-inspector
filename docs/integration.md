@@ -86,33 +86,39 @@ export async function openDbInspector() {
 
 ### 1. Wrap the plugin in a library / module
 
-Create a mobile library (ODC) or a module (O11), for example `DbInspectorPlugin`. Set its **Extensibility Configuration** to:
+Create a library (O11) or a mobile library (ODC), for example `CordovaDBInspector`. Set its **Extensibility Configuration** to:
 
 ```json
 {
-  "plugin": {
-    "url": "https://github.com/henriquefps/cordova-plugin-db-inspector.git#v1.1.0"
+  "buildConfigurations": {
+    "cordova": {
+      "source": {
+        "url": "https://github.com/henriquefps/cordova-plugin-db-inspector.git#v1.1.0"
+      }
+    }
   }
 }
 ```
 
-Pin a tag (`#v1.1.0`) so every build uses the same plugin version. The plugin runs on any build service (MABS) version that ships cordova-android ≥ 10 and cordova-ios ≥ 6.
+Pin a tag (`#v1.1.0`) so every build uses the same plugin version. The older `{"plugin": {"url": "…"}}` form still builds, but O11 Service Studio flags it as a deprecated schema. The plugin runs on any build service (MABS) version that ships cordova-android ≥ 10 and cordova-ios ≥ 6.
 
 ### 2. Client actions
 
-**`CheckDbInspectorPlugin`** (output `IsAvailable`, Boolean). Returns false in the browser, in the OutSystems preview app, or when the native build doesn't include the plugin:
+These are the public client actions and structures of the reference O11 library `CordovaDBInspector`. Each action runs a JavaScript node with the snippet shown, then maps the node's outputs to the action's outputs.
+
+**`CheckDbInspectorPlugin`** (function, output `IsAvailable` Boolean). Returns false in the browser, in the OutSystems preview app, or when the native build doesn't include the plugin:
 
 ```javascript
 $parameters.IsAvailable = !!(window.cordova && cordova.plugins && cordova.plugins.DbInspector);
 ```
 
-**`OpenDbInspector`** (optional inputs `DatabaseName`, `Title` and `PresetsJson`, all Text; outputs `Success` Boolean and `ErrorMessage` Text):
+**`OpenInspector`** (optional inputs `Database`, `Title` and `PresetsJson`, all Text; outputs `Success` Boolean and `ErrorMessage` Text):
 
 ```javascript
 var options = {};
-if ($parameters.DatabaseName) options.database = $parameters.DatabaseName;
+if ($parameters.Database) options.database = $parameters.Database;
 if ($parameters.Title) options.title = $parameters.Title;
-if ($parameters.PresetsJson) options.presets = $parameters.PresetsJson;
+if ($parameters.PresetsJson) options.presets = JSON.parse($parameters.PresetsJson);
 
 cordova.plugins.DbInspector.open(options).then(function () {
   $parameters.Success = true;
@@ -124,16 +130,34 @@ cordova.plugins.DbInspector.open(options).then(function () {
 });
 ```
 
+**`ListDatabases`** (outputs `Databases` List of `DbInspectorDatabase`, `Success`, `ErrorMessage`). The JavaScript node returns `JSON.stringify(await listDatabases())` as Text, and a **JSONDeserialize** turns it into the list.
+
 Call `CheckDbInspectorPlugin` first and show a message when the plugin isn't available.
 
-**`RunDbQueries`** runs queries with no UI. Its input `RequestJson` (Text) holds the whole `runQueries()` options document. Its outputs are `ResultJson` (Text), `Success` (Boolean) and `ErrorMessage` (Text). Add a JavaScript node with the input and outputs mapped:
+**`RunQueries`** runs queries with no UI.
+
+| | Name | Type | Notes |
+|---|---|---|---|
+| in | `Database` | Text | File name or id from `ListDatabases` |
+| in | `QueriesJson` | Text | Array of `{name, sql, params}` or a presets document |
+| in | `MaxRows` | Integer | Per-query cap, default 1000 (max 10000) |
+| out | `Results` | List of `DbInspectorQueryResult` | One item per query, in order |
+| out | `ResultJson` | Text | The whole `runQueries()` result, ready to send to a server as is |
+| out | `Success` | Boolean | False only when the whole batch can't run |
+| out | `ErrorMessage` | Text | |
 
 ```javascript
-// $parameters.RequestJson, for example:
-// {"database":"bg_sync.db","maxRows":500,
-//  "queries":[{"name":"pending","sql":"SELECT Id, Status FROM sync_queue WHERE Status = :s","params":{"s":1}}]}
-cordova.plugins.DbInspector.runQueries($parameters.RequestJson).then(function (result) {
-  $parameters.ResultJson = JSON.stringify(result);
+// $parameters.QueriesJson, for example:
+// [{"name":"pending","sql":"SELECT Id, Status FROM sync_queue WHERE Status = :s","params":{"s":1}}]
+var options = { database: $parameters.Database, queries: JSON.parse($parameters.QueriesJson) };
+if ($parameters.MaxRows > 0) options.maxRows = $parameters.MaxRows;
+cordova.plugins.DbInspector.runQueries(options).then(function (out) {
+  $parameters.ResultJson = JSON.stringify(out);
+  // rows differ per query: hand them over as JSON text (RowsJson) next to the fixed fields
+  $parameters.ResultsJson = JSON.stringify(out.results.map(function (r) {
+    return { name: r.name, sql: r.sql, columns: r.columns, rowsJson: JSON.stringify(r.rows),
+             rowCount: r.rowCount, truncated: r.truncated, durationMs: Math.round(r.durationMs || 0), error: r.error || '' };
+  }));
   $parameters.Success = true;
   $resolve();
 }, function (err) {
@@ -143,17 +167,16 @@ cordova.plugins.DbInspector.runQueries($parameters.RequestJson).then(function (r
 });
 ```
 
-Then turn the text into data with **JSONDeserialize**, for example to a `RunQueriesResult` structure:
+A **JSONDeserialize** of `ResultsJson` fills `Results`:
 
-| Structure | Attributes |
+| Structure | Attributes (Name in JSON) |
 |---|---|
-| `RunQueriesResult` | `database` (`DbRef`), `startedAt` (Text), `durationMs` (Decimal), `results` (List of `QueryResult`) |
-| `DbRef` | `id` (Text), `name` (Text) |
-| `QueryResult` | `name` (Text), `sql` (Text), `columns` (List of Text), `rowCount` (Integer), `truncated` (Boolean), `durationMs` (Decimal), `error` (Text) |
+| `DbInspectorQueryResult` | `Name` (name), `Sql` (sql), `Columns` List of Text (columns), `RowsJson` Text (rowsJson), `RowCount` Integer (rowCount), `Truncated` Boolean (truncated), `DurationMs` Integer (durationMs), `Error` Text (error, empty on success) |
+| `DbInspectorDatabase` | `Id`, `Name`, `Dir`, `Size`, `WalSize`, `JournalSize`, `ModifiedMs` (modified), `Encrypted`, `Empty` |
 
-The `rows` differ for each query, so they don't fit a fixed structure. Either deserialize one query's rows with a structure that matches its columns (`JSONDeserialize` of a `ResultJson` you build per query in JavaScript, for example `JSON.stringify(result.results[0].rows)` into a List of `PendingRow`), or keep `ResultJson` as Text and send it to your server as is. `JSONDeserialize` maps attribute names by their JSON names. Set each attribute's *Name in JSON* when the names differ.
+The rows differ for each query, so they don't fit a fixed structure. To work with one query's rows as data, deserialize its `RowsJson` into a List of your own structure that matches its columns (for example `PendingRow`). `JSONDeserialize` maps attributes by *Name in JSON*. Or send `ResultJson` to your server as is.
 
-> Gate `RunDbQueries` like `OpenDbInspector`. See [Keeping it out of production](#keeping-it-out-of-production).
+> Gate `RunQueries` like `OpenInspector`. See [Keeping it out of production](#keeping-it-out-of-production).
 
 ### 3. What you'll see
 

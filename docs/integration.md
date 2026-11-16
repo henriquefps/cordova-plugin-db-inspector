@@ -35,7 +35,7 @@ The plugin is inert until you call `open()` or `runQueries()`. It adds no backgr
 ```bash
 cordova plugin add cordova-plugin-db-inspector
 # or straight from git / a local checkout
-cordova plugin add https://github.com/henriquefps/cordova-plugin-db-inspector.git#v1.1.0
+cordova plugin add https://github.com/henriquefps/cordova-plugin-db-inspector.git#v1.2.0
 cordova plugin add ../cordova-plugin-db-inspector
 ```
 
@@ -93,14 +93,14 @@ Create a library (O11) or a mobile library (ODC), for example `CordovaDBInspecto
   "buildConfigurations": {
     "cordova": {
       "source": {
-        "url": "https://github.com/henriquefps/cordova-plugin-db-inspector.git#v1.1.0"
+        "url": "https://github.com/henriquefps/cordova-plugin-db-inspector.git#v1.2.0"
       }
     }
   }
 }
 ```
 
-Pin a tag (`#v1.1.0`) so every build uses the same plugin version. The older `{"plugin": {"url": "…"}}` form still builds, but O11 Service Studio flags it as a deprecated schema. The plugin runs on any build service (MABS) version that ships cordova-android ≥ 10 and cordova-ios ≥ 6.
+Pin a tag (`#v1.2.0`) so every build uses the same plugin version. The older `{"plugin": {"url": "…"}}` form still builds, but O11 Service Studio flags it as a deprecated schema. The plugin runs on any build service (MABS) version that ships cordova-android ≥ 10 and cordova-ios ≥ 6.
 
 ### 2. Client actions
 

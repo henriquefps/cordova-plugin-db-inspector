@@ -1,6 +1,6 @@
 {
   "name": "cordova-plugin-db-inspector",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Read-only, on-device SQLite inspector and visual query builder for Cordova, Capacitor and OutSystems mobile apps (Android + iOS)",
   "author": "Henrique Silva <contact@hfps.dev> (https://hfps.dev)",
   "license": "Apache-2.0",

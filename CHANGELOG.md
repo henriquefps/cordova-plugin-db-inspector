@@ -4,6 +4,8 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-16
+
 ### Changed
 - New look for the inspector and the web site, in the hfps identity (blue palette): OKLCH colour tokens for light and dark, Inter, Phosphor icons, header and tabs on a tinted background with the content in one rounded card, 12px minimum text size and sentence-case labels. Contrast meets WCAG AA in both themes. Behaviour is unchanged.
 - Inter (latin subset, weights 400 to 600, about 34 KB as base64) is embedded in `db-inspector.html`, so the page stays self-contained and works offline in the app. The site's Content-Security-Policy adds `font-src data:` for it.
@@ -41,6 +43,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - Web version of the inspector (`web/`, deployable to Cloudflare Pages): SQLite in WebAssembly over a lazy, read-only File VFS with WAL overlay, drag & drop, demo database, strict CSP.
 - Generic host hooks in the inspector page (`window.DbInspectorHost`, `addFiles`, `context.canAddFiles` / `canClose`, `window.__dbiDatabasesChanged`).
 
-[Unreleased]: https://github.com/henriquefps/cordova-plugin-db-inspector/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/henriquefps/cordova-plugin-db-inspector/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/henriquefps/cordova-plugin-db-inspector/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/henriquefps/cordova-plugin-db-inspector/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/henriquefps/cordova-plugin-db-inspector/releases/tag/v1.0.0

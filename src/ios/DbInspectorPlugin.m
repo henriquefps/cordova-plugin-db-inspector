@@ -26,4 +26,24 @@
   }];
 }
 
+- (void)runQueries:(CDVInvokedUrlCommand *)command {
+  id request = command.arguments.firstObject;
+  [self.commandDelegate runInBackground:^{
+    DbInspectorEngine *engine = [DbInspectorEngine new];
+    CDVPluginResult *result;
+    @try {
+      if (![request isKindOfClass:[NSDictionary class]]) {
+        result = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"Missing options"];
+      } else {
+        result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:[engine runQueries:request]];
+      }
+    } @catch (NSException *e) {
+      result = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:e.reason ?: @"Failed to run queries"];
+    } @finally {
+      [engine closeAll];
+    }
+    [self.commandDelegate sendPluginResult:result callbackId:command.callbackId];
+  }];
+}
+
 @end

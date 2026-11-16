@@ -7,6 +7,7 @@ How to add `cordova-plugin-db-inspector` to a Cordova, Ionic/Capacitor or OutSys
 - [Capacitor / Ionic](#capacitor--ionic)
 - [OutSystems (O11 / ODC)](#outsystems-o11--odc)
 - [Opening the inspector](#opening-the-inspector)
+- [Running queries without the UI](#running-queries-without-the-ui)
 - [Shipping team presets](#shipping-team-presets)
 - [Keeping it out of production](#keeping-it-out-of-production)
 - [Where your data has to live](#where-your-data-has-to-live)
@@ -25,7 +26,7 @@ How to add `cordova-plugin-db-inspector` to a Cordova, Ionic/Capacitor or OutSys
 
 The plugin has **no native dependencies**. Android uses the platform `android.database.sqlite` from Java, so it needs no Kotlin or AndroidX preferences. iOS uses the system `libsqlite3` and `WebKit`, with no CocoaPods. It requests **no permissions**: files are saved and imported through the Storage Access Framework on Android and the share sheet / document picker on iOS.
 
-The plugin is inert until you call `open()`. It adds no background work, no startup cost and no network access.
+The plugin is inert until you call `open()` or `runQueries()`. It adds no background work, no startup cost and no network access.
 
 ---
 
@@ -34,7 +35,7 @@ The plugin is inert until you call `open()`. It adds no background work, no star
 ```bash
 cordova plugin add cordova-plugin-db-inspector
 # or straight from git / a local checkout
-cordova plugin add https://github.com/henriquefps/cordova-plugin-db-inspector.git#v1.0.0
+cordova plugin add https://github.com/henriquefps/cordova-plugin-db-inspector.git#v1.1.0
 cordova plugin add ../cordova-plugin-db-inspector
 ```
 
@@ -90,12 +91,12 @@ Create a mobile library (ODC) or a module (O11), for example `DbInspectorPlugin`
 ```json
 {
   "plugin": {
-    "url": "https://github.com/henriquefps/cordova-plugin-db-inspector.git#v1.0.0"
+    "url": "https://github.com/henriquefps/cordova-plugin-db-inspector.git#v1.1.0"
   }
 }
 ```
 
-Pin a tag (`#v1.0.0`) so every build uses the same plugin version. The plugin runs on any build service (MABS) version that ships cordova-android ≥ 10 and cordova-ios ≥ 6.
+Pin a tag (`#v1.1.0`) so every build uses the same plugin version. The plugin runs on any build service (MABS) version that ships cordova-android ≥ 10 and cordova-ios ≥ 6.
 
 ### 2. Client actions
 
@@ -124,6 +125,35 @@ cordova.plugins.DbInspector.open(options).then(function () {
 ```
 
 Call `CheckDbInspectorPlugin` first and show a message when the plugin isn't available.
+
+**`RunDbQueries`** runs queries with no UI. Its input `RequestJson` (Text) holds the whole `runQueries()` options document. Its outputs are `ResultJson` (Text), `Success` (Boolean) and `ErrorMessage` (Text). Add a JavaScript node with the input and outputs mapped:
+
+```javascript
+// $parameters.RequestJson, for example:
+// {"database":"bg_sync.db","maxRows":500,
+//  "queries":[{"name":"pending","sql":"SELECT Id, Status FROM sync_queue WHERE Status = :s","params":{"s":1}}]}
+cordova.plugins.DbInspector.runQueries($parameters.RequestJson).then(function (result) {
+  $parameters.ResultJson = JSON.stringify(result);
+  $parameters.Success = true;
+  $resolve();
+}, function (err) {
+  $parameters.Success = false;
+  $parameters.ErrorMessage = String(err);
+  $resolve();
+});
+```
+
+Then turn the text into data with **JSONDeserialize**, for example to a `RunQueriesResult` structure:
+
+| Structure | Attributes |
+|---|---|
+| `RunQueriesResult` | `database` (`DbRef`), `startedAt` (Text), `durationMs` (Decimal), `results` (List of `QueryResult`) |
+| `DbRef` | `id` (Text), `name` (Text) |
+| `QueryResult` | `name` (Text), `sql` (Text), `columns` (List of Text), `rowCount` (Integer), `truncated` (Boolean), `durationMs` (Decimal), `error` (Text) |
+
+The `rows` differ for each query, so they don't fit a fixed structure. Either deserialize one query's rows with a structure that matches its columns (`JSONDeserialize` of a `ResultJson` you build per query in JavaScript, for example `JSON.stringify(result.results[0].rows)` into a List of `PendingRow`), or keep `ResultJson` as Text and send it to your server as is. `JSONDeserialize` maps attribute names by their JSON names. Set each attribute's *Name in JSON* when the names differ.
+
+> Gate `RunDbQueries` like `OpenDbInspector`. See [Keeping it out of production](#keeping-it-out-of-production).
 
 ### 3. What you'll see
 
@@ -168,6 +198,65 @@ cordova.plugins.DbInspector.listDatabases(success?, error?)  // → Promise<Data
 
 ---
 
+## Running queries without the UI
+
+```javascript
+cordova.plugins.DbInspector.runQueries(options, success?, error?) // → Promise<RunQueriesResult>
+```
+
+Runs a batch of queries against one database, with no screen, on a background thread (Android thread pool / iOS background queue), and resolves with plain JSON. Use it for automated extraction, health checks or syncing local data to a server.
+
+| Option | Type | Description |
+|---|---|---|
+| `database` | string | **Required.** File name (`"bg_sync.db"`) or id (`"databases/bg_sync.db"`), resolved like `open({ database })`: an exact id match first, then the file name. |
+| `queries` | array \| object \| JSON string | `[{ name?, sql, params?, maxRows? }]` (a bare SQL string also works), or a presets document (`{ "format": "hfps-db-inspector-presets", "presets": [ … ] }`, see [presets.md](presets.md)). |
+| `params` | object | Named parameter values shared by every query. A query's own `params` take precedence. |
+| `maxRows` | number | Row cap per query. Default 1000, maximum 10000. A query's own `maxRows` overrides it (same maximum). |
+
+`options` itself may be a JSON string, which is the easiest form to pass from an OutSystems Text variable.
+
+**Parameters.** Named parameters use the inspector's syntax: `:name`, `@name` or `$name`, outside string literals and comments. Their values come from an object (`{ "s": 1 }`, and `{ ":s": 1 }` also works). Positional `?` parameters take an array (`"params": [1, "x"]`). The values are **bound**, never inlined into the SQL, with their own type: numbers as integer or real, strings as text, `true`/`false` as `1`/`0`, and `null` as NULL. Objects are bound as JSON text. A named parameter with no value fails that query (`Missing value for parameter :s.`).
+
+**Statements.** Each query is one statement. The batch accepts `SELECT`, `WITH`, `VALUES`, `PRAGMA` and `EXPLAIN` only, on the same read-only connection as the inspector. Anything else (`DELETE`, `ATTACH`, `VACUUM INTO`, …) is refused before it runs.
+
+**Result:**
+
+```json
+{
+  "database": { "id": "databases/bg_sync.db", "name": "bg_sync.db" },
+  "startedAt": "2026-11-16T18:28:19.734Z",
+  "durationMs": 5.7,
+  "results": [
+    {
+      "name": "pending",
+      "sql": "SELECT Id, Name, Photo FROM Item WHERE Status = :s",
+      "columns": ["Id", "Name", "Photo"],
+      "rows": [ { "Id": 2, "Name": "item 2", "Photo": "iVBORw0KGgoAAAANSUhEUg==" } ],
+      "rowCount": 1,
+      "truncated": false,
+      "durationMs": 0.19,
+      "error": null
+    },
+    {
+      "name": "broken",
+      "sql": "SELECT * FROM NoSuchTable",
+      "columns": [], "rows": [], "rowCount": 0, "truncated": false, "durationMs": 0.14,
+      "error": "no such table: NoSuchTable …"
+    }
+  ]
+}
+```
+
+- `rows` are objects keyed by column name. If a name repeats (`SELECT a.Id, b.Id …`), later columns get a suffix (`Id_2`), and `columns` lists those keys.
+- Values: integers, reals, text and NULL keep their JSON types. BLOBs become **base64** strings. Integers beyond ±2^53 become strings, so JavaScript doesn't round them. Text and BLOBs are returned in full, with no preview cut. Keep `maxRows` modest for tables with large binary attributes.
+- `truncated` is `true` when the query had more rows than `maxRows`.
+- `error` is `null`, or the message for this query. The other queries still run.
+- The promise **rejects** (with a message string) only when the whole batch can't run: the database doesn't exist, the database is encrypted, or the input is invalid (not JSON, no `database`, no `queries`).
+
+> **Security.** `runQueries()` lets any JavaScript running in the app read every local database without the inspector screen. Gate it exactly like `open()`, and don't expose it to remote content or third-party scripts.
+
+---
+
 ## Shipping team presets
 
 Pass the presets your team maintains through `open()`. They are merged by `id`, so updating the app updates them, and presets saved on the device are kept:
@@ -201,6 +290,8 @@ The inspector shows **everything** in the app's local storage to whoever holds t
 3. **Never** add an unconditional, visible "Open DB Inspector" button to a production app.
 
 The Android activity is `exported="false"`: other apps can't launch it, and only your own code calling `open()` can.
+
+The same applies to `runQueries()`. It reads the databases **without any screen**, so any JavaScript in the app (including scripts the app loads from elsewhere) can call it. Call it only from code paths gated like `open()`, and leave the plugin out of builds that don't need it.
 
 ---
 

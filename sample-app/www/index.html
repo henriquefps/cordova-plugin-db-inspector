@@ -31,6 +31,7 @@
     <button id="open">Open DB Inspector</button>
     <button id="openPresets" class="secondary">Open with team presets</button>
     <button id="list" class="secondary">List databases (JS API)</button>
+    <button id="run" class="secondary">Run queries (JS API)</button>
   </div>
   <div class="card"><pre id="out">Waiting for deviceready…</pre></div>
 
@@ -57,6 +58,21 @@
     }]
   };
 
+  // Headless extraction: the same kind of input an OutSystems client action would pass as Text.
+  var RUN_QUERIES = {
+    database: 'sample.db',
+    maxRows: 3,
+    queries: [
+      { name: 'tables', sql: "SELECT name, type FROM sqlite_master WHERE type = 'table' ORDER BY name" },
+      { name: 'by status', sql: 'SELECT Id, Name, Status FROM Item WHERE Status = :s ORDER BY Id', params: { s: 1 } },
+      { name: 'positional', sql: 'SELECT ? AS a, ? AS b, ? AS c', params: [42, 'text', null] },
+      { name: 'blob + big int', sql: 'SELECT Id, Photo, 9007199254740993 AS big, 1.5 AS real FROM Item WHERE Photo IS NOT NULL LIMIT 1' },
+      { name: 'truncated', sql: 'SELECT Id FROM Item ORDER BY Id' },
+      { name: 'broken', sql: 'SELECT * FROM NoSuchTable' },
+      { name: 'write refused', sql: 'DELETE FROM Item' }
+    ]
+  };
+
   document.addEventListener('deviceready', function () {
     var inspector = cordova.plugins.DbInspector;
     log('Ready. Plugin: ' + (inspector ? 'loaded' : 'MISSING'));
@@ -68,6 +84,10 @@
     };
     document.getElementById('list').onclick = function () {
       inspector.listDatabases().then(log, log);
+    };
+    document.getElementById('run').onclick = function () {
+      // A JSON string works as well as an object (handy for OutSystems Text inputs).
+      inspector.runQueries(JSON.stringify(RUN_QUERIES)).then(function (r) { window.__lastRun = r; log(r); }, log);
     };
   });
 </script>

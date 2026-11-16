@@ -20,6 +20,13 @@ NS_ASSUME_NONNULL_BEGIN
 - (NSDictionary *)dbInfo:(NSString *)dbId;
 - (NSDictionary *)tableSizes:(NSString *)dbId;
 - (NSArray *)integrityCheck:(NSString *)dbId;
+/** Finds a database by id or file name, like open({database}); raises for unknown or encrypted ones. */
+- (NSDictionary *)findDatabase:(NSString *)idOrName;
+/**
+ * Headless batch for the runQueries JS API. request: {database, queries: [{sql, args, maxRows} | {error}]}.
+ * Per-query failures go into that result's "error"; raises only for batch-level problems.
+ */
+- (NSDictionary *)runQueries:(NSDictionary *)request;
 /** Consistent single-file copy (WAL included) in the temp dir; the original is untouched. */
 - (NSURL *)snapshot:(NSString *)dbId;
 /** Safe to call from any thread: aborts the statement currently running, if any. */

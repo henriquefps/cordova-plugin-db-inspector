@@ -90,17 +90,13 @@ Create a library (O11) or a mobile library (ODC), for example `CordovaDBInspecto
 
 ```json
 {
-  "buildConfigurations": {
-    "cordova": {
-      "source": {
-        "url": "https://github.com/henriquefps/cordova-plugin-db-inspector.git#v1.2.0"
-      }
-    }
+  "plugin": {
+    "url": "https://github.com/henriquefps/cordova-plugin-db-inspector.git#v1.2.0"
   }
 }
 ```
 
-Pin a tag (`#v1.2.0`) so every build uses the same plugin version. The older `{"plugin": {"url": "…"}}` form still builds, but O11 Service Studio flags it as a deprecated schema. The plugin runs on any build service (MABS) version that ships cordova-android ≥ 10 and cordova-ios ≥ 6.
+Pin a tag (`#v1.2.0`) so every build uses the same plugin version. O11 Service Studio shows a "Deprecated Extensibility Configuration" warning for this form; ignore it, this is the form MABS installs plugins from. Don't use a `buildConfigurations` / `cordova` / `source` object instead: MABS silently skips it and the build ships without the plugin. To confirm the plugin made it into a build, look for `plugman.fetch on plugin "https://github.com/henriquefps/cordova-plugin-db-inspector.git#v1.2.0"` in the MABS build log. The plugin runs on any build service (MABS) version that ships cordova-android ≥ 10 and cordova-ios ≥ 6.
 
 ### 2. Client actions
 
